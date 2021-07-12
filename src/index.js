@@ -148,7 +148,7 @@ window.addEventListener
 				{
 					image_data:
 					{
-						source: '/assets/input_16.img',
+						source: 'assets/input_16.img',
 
 						type: 'arraybuffer',
 
@@ -157,7 +157,7 @@ window.addEventListener
 
 					header:
 					{
-						source: '/assets/input.hdr',
+						source: 'assets/input.hdr',
 
 						type: 'text',
 
