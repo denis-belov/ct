@@ -1,0 +1,34 @@
+html
+
+	head
+
+		meta(charset="utf-8")
+
+		block title
+
+			title
+
+		meta(name="viewport", content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no")
+
+	body
+
+		canvas#canvas
+
+		div(
+			style="position: absolute; left: 0; top: 0; color: white; background-color: black;"
+		)
+			span window width:&nbsp
+			span#window_width
+			br
+			span window level:&nbsp
+			span#window_level
+
+			form
+				input(type="radio" id="radio-window" name="options" value="window")
+				label window
+				br
+				input(type="radio" id="radio-scale" name="options" value="scale")
+				label scale
+				br
+				input(type="radio" id="radio-translate" name="options" value="translate")
+				label translate
