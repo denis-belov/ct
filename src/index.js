@@ -71,10 +71,21 @@ class Plane
 			uniform vec2 u_image_size;
 			uniform vec2 u_offsets;
 			uniform float u_scale;
-			uniform int u_window_width;
-			uniform int u_window_level;
+			uniform float u_window_width;
+			uniform float u_window_level;
 
 			layout (location = 0) out vec4 fragment_color;
+
+			float convert (float x, float lowest, float highest)
+			{
+				float a = 255.0 / (highest - lowest);
+
+				float b = -255.0 / (highest - lowest) * lowest;
+
+				float y = (a * x) + b;
+
+				return y;
+			}
 
 			void main (void)
 			{
@@ -126,24 +137,14 @@ class Plane
 					discard;
 				}
 
-				int r = int (texture(U_IMAGE_DATA, tex_coords).r);
+				float lowest = u_window_level - (u_window_width / 2.0);
+				float highest = u_window_level + (u_window_width / 2.0);
 
-				int lowest = u_window_level - (u_window_width / 2);
-				int highest = u_window_level + (u_window_width / 2);
+				float greyscale_in = float (texture(U_IMAGE_DATA, tex_coords).r);
 
-				if (r < lowest)
-				{
-					r = 0;
-				}
+				float greyscale_out = convert(greyscale_in, lowest, highest);
 
-				if (r > highest)
-				{
-					r = 0xffff;
-				}
-
-				r /= 0xff;
-
-				fragment_color.rgb = vec3(float(r) / float(0xff));
+				fragment_color.rgb = vec3(greyscale_out / 255.0);
 
 				fragment_color.a = 1.0;
 			}`;
@@ -255,8 +256,8 @@ window.addEventListener
 
 		const plane = new Plane(header.imageWidth * DPR, header.imageHeight * DPR);
 
-		gl.uniform1i(plane.u_window_width, header.windowWidth);
-		gl.uniform1i(plane.u_window_level, header.windowLevel);
+		gl.uniform1f(plane.u_window_width, header.windowWidth);
+		gl.uniform1f(plane.u_window_level, header.windowLevel);
 
 		const mousemove = (evt) =>
 		{
@@ -287,8 +288,8 @@ window.addEventListener
 				document.getElementById('window_width').innerHTML = header.windowWidth;
 				document.getElementById('window_level').innerHTML = header.windowLevel;
 
-				gl.uniform1i(plane.u_window_width, header.windowWidth);
-				gl.uniform1i(plane.u_window_level, header.windowLevel);
+				gl.uniform1f(plane.u_window_width, header.windowWidth);
+				gl.uniform1f(plane.u_window_level, header.windowLevel);
 
 				gl.drawArrays(gl.TRIANGLES, 0, 3);
 			}
