@@ -5,24 +5,24 @@ import Loader from 'external-data-loader';
 
 
 
-const DPR = window.devicePixelRatio || 1;
-
-
-
 const loader = new Loader();
-
-
 
 const canvas = document.getElementById('canvas');
 
 const gl = canvas.getContext('webgl2');
 
+const DPR = window.devicePixelRatio || 1;
+
+canvas.width = window.innerWidth * DPR;
+canvas.height = window.innerHeight * DPR;
+
+gl.viewport(0, 0, window.innerWidth * DPR, window.innerHeight * DPR);
 gl.clearColor(0, 0, 0, 1);
 
 
 
 let scale = 1;
-const translation = [ 0, 0 ];
+const offsets = [ 0, 0 ];
 
 
 
@@ -30,7 +30,7 @@ class Plane
 {
 	constructor (image_width, image_height)
 	{
-		this.geometry = new Float32Array([ -1, -1, 0, -1, 1, 0, 1, 1, 0, 1, 1, 0, 1, -1, 0, -1, -1, 0 ]);
+		this.geometry = new Float32Array([ -1, -1, 0, -1, 3, 0, 3, -1, 0 ]);
 
 		this.program = gl.createProgram();
 
@@ -66,8 +66,11 @@ class Plane
 			precision highp int;
 			precision highp float;
 
-			uniform highp usampler2D u_IMAGE_DATA;
+			uniform highp usampler2D U_IMAGE_DATA;
+			uniform vec2 u_window_size;
 			uniform vec2 u_image_size;
+			uniform vec2 u_offsets;
+			uniform float u_scale;
 			uniform int u_window_width;
 			uniform int u_window_level;
 
@@ -75,7 +78,55 @@ class Plane
 
 			void main (void)
 			{
-				int r = int (texture(u_IMAGE_DATA, gl_FragCoord.xy / u_image_size).r);
+				vec2 tex_coords = gl_FragCoord.xy / u_window_size;
+
+				vec2 offsets = u_offsets;
+
+				if
+				(
+					(u_image_size.x / u_image_size.y) <
+					(u_window_size.x / u_window_size.y)
+				)
+				{
+					float new_image_width = u_window_size.y / u_image_size.y * u_image_size.x;
+
+					tex_coords.s -= 0.5;
+					tex_coords.s *= u_window_size.x / new_image_width;
+					tex_coords.s += 0.5;
+
+					offsets.s /= new_image_width;
+					offsets.t /= u_window_size.y;
+				}
+				else
+				{
+					float new_image_height = u_window_size.x / u_image_size.x * u_image_size.y;
+
+					tex_coords.t -= 0.5;
+					tex_coords.t *= u_window_size.y / new_image_height;
+					tex_coords.t += 0.5;
+
+					offsets.s /= u_window_size.x;
+					offsets.t /= new_image_height;
+				}
+
+				tex_coords += offsets;
+
+				tex_coords -= 0.5;
+				tex_coords *= u_scale;
+				tex_coords += 0.5;
+
+				if
+				(
+					tex_coords.s < 0.0 ||
+					tex_coords.s > 1.0 ||
+					tex_coords.t < 0.0 ||
+					tex_coords.t > 1.0
+				)
+				{
+					discard;
+				}
+
+				int r = int (texture(U_IMAGE_DATA, tex_coords).r);
 
 				int lowest = u_window_level - (u_window_width / 2);
 				int highest = u_window_level + (u_window_width / 2);
@@ -90,7 +141,9 @@ class Plane
 					r = 0xffff;
 				}
 
-				fragment_color.rgb = vec3(float(r) / float(0xffff));
+				r /= 0xff;
+
+				fragment_color.rgb = vec3(float(r) / float(0xff));
 
 				fragment_color.a = 1.0;
 			}`;
@@ -116,20 +169,23 @@ class Plane
 		gl.linkProgram(this.program);
 
 		gl.useProgram(this.program);
-		gl.uniform1i(gl.getUniformLocation(this.program, 'u_IMAGE_DATA'), 0);
-		gl.uniform2f(gl.getUniformLocation(this.program, 'u_image_size'), image_width, image_height);
 
-		gl.useProgram(null);
+		this.u_window_size = gl.getUniformLocation(this.program, 'u_window_size');
+		this.u_image_size = gl.getUniformLocation(this.program, 'u_image_size');
+		this.u_offsets = gl.getUniformLocation(this.program, 'u_offsets');
+		this.u_scale = gl.getUniformLocation(this.program, 'u_scale');
+		this.u_window_width = gl.getUniformLocation(this.program, 'u_window_width');
+		this.u_window_level = gl.getUniformLocation(this.program, 'u_window_level');
+
+		gl.uniform1i(gl.getUniformLocation(this.program, 'U_IMAGE_DATA'), 0);
+		gl.uniform2f(this.u_window_size, window.innerWidth, window.innerHeight);
+		gl.uniform2f(this.u_image_size, image_width, image_height);
+		gl.uniform1f(this.u_scale, scale);
 
 		gl.enableVertexAttribArray(0);
-	}
 
-	draw ()
-	{
-		gl.useProgram(this.program);
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.position_buffer);
 		gl.vertexAttribPointer(0, 3, gl.FLOAT, 0, 0, 0);
-		gl.drawArrays(gl.TRIANGLES, 0, 6);
 	}
 }
 
@@ -174,33 +230,6 @@ window.addEventListener
 		document.getElementById('window_width').innerHTML = header.windowWidth;
 		document.getElementById('window_level').innerHTML = header.windowLevel;
 
-		if
-		(
-			(header.imageWidth / header.imageHeight) >
-			(window.innerWidth / window.innerHeight)
-		)
-		{
-			translation[1] = window.innerHeight * 0.5;
-
-			canvas.style.width = '100%';
-			canvas.style.height = 'auto';
-			canvas.style.marginLeft = 0;
-			canvas.style.marginTop = `-${ header.imageHeight / header.imageWidth * window.innerWidth * 0.5 }px`;
-		}
-		else
-		{
-			translation[0] = window.innerWidth * 0.5;
-
-			canvas.style.width = 'auto';
-			canvas.style.height = '100%';
-			canvas.style.marginLeft = `-${ header.imageWidth / header.imageHeight * window.innerHeight * 0.5 }px`;
-			canvas.style.marginTop = 0;
-		}
-
-		canvas.width = header.imageWidth * DPR;
-		canvas.height = header.imageHeight * DPR;
-		canvas.style.transform = `translate(${ translation[0] }px, ${ translation[1] }px) scale(${ scale })`;
-
 
 
 		const gl_texture = gl.createTexture();
@@ -226,10 +255,8 @@ window.addEventListener
 
 		const plane = new Plane(header.imageWidth * DPR, header.imageHeight * DPR);
 
-		gl.useProgram(plane.program);
-
-		gl.uniform1i(gl.getUniformLocation(plane.program, 'u_window_width'), header.windowWidth);
-		gl.uniform1i(gl.getUniformLocation(plane.program, 'u_window_level'), header.windowLevel);
+		gl.uniform1i(plane.u_window_width, header.windowWidth);
+		gl.uniform1i(plane.u_window_level, header.windowLevel);
 
 		const mousemove = (evt) =>
 		{
@@ -260,8 +287,10 @@ window.addEventListener
 				document.getElementById('window_width').innerHTML = header.windowWidth;
 				document.getElementById('window_level').innerHTML = header.windowLevel;
 
-				gl.uniform1i(gl.getUniformLocation(plane.program, 'u_window_width'), header.windowWidth);
-				gl.uniform1i(gl.getUniformLocation(plane.program, 'u_window_level'), header.windowLevel);
+				gl.uniform1i(plane.u_window_width, header.windowWidth);
+				gl.uniform1i(plane.u_window_level, header.windowLevel);
+
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
 			}
 			else if (document.getElementById('radio-scale').checked)
 			{
@@ -272,14 +301,18 @@ window.addEventListener
 					scale = 0.01;
 				}
 
-				canvas.style.transform = `translate(${ translation[0] }px, ${ translation[1] }px) scale(${ scale })`;
+				gl.uniform1f(plane.u_scale, scale);
+
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
 			}
 			else if (document.getElementById('radio-translate').checked)
 			{
-				translation[0] += evt.movementX;
-				translation[1] += evt.movementY;
+				offsets[0] -= evt.movementX;
+				offsets[1] += evt.movementY;
 
-				canvas.style.transform = `translate(${ translation[0] }px, ${ translation[1] }px) scale(${ scale })`;
+				gl.uniform2f(plane.u_offsets, ...offsets);
+
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
 			}
 		};
 
@@ -303,19 +336,25 @@ window.addEventListener
 			},
 		);
 
+		window.addEventListener
+		(
+			'resize',
+
+			() =>
+			{
+				canvas.width = window.innerWidth * DPR;
+				canvas.height = window.innerHeight * DPR;
+
+				gl.viewport(0, 0, window.innerWidth * DPR, window.innerHeight * DPR);
+
+				gl.uniform2f(plane.u_window_size, window.innerWidth, window.innerHeight);
+
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
+			},
+		);
 
 
-		const render = () =>
-		{
-			gl.viewport(0, 0, header.imageWidth * DPR, header.imageHeight * DPR);
 
-			gl.clear(gl.COLOR_BUFFER_BIT);
-
-			plane.draw();
-
-			requestAnimationFrame(render);
-		};
-
-		render();
+		gl.drawArrays(gl.TRIANGLES, 0, 3);
 	},
 );
