@@ -179,7 +179,7 @@ class Plane
 		this.u_window_level = gl.getUniformLocation(this.program, 'u_window_level');
 
 		gl.uniform1i(gl.getUniformLocation(this.program, 'U_IMAGE_DATA'), 0);
-		gl.uniform2f(this.u_window_size, window.innerWidth, window.innerHeight);
+		gl.uniform2f(this.u_window_size, window.innerWidth * DPR, window.innerHeight * DPR);
 		gl.uniform2f(this.u_image_size, image_width, image_height);
 		gl.uniform1f(this.u_scale, scale);
 
@@ -254,7 +254,7 @@ window.addEventListener
 
 
 
-		const plane = new Plane(header.imageWidth * DPR, header.imageHeight * DPR);
+		const plane = new Plane(header.imageWidth, header.imageHeight);
 
 		gl.uniform1f(plane.u_window_width, header.windowWidth);
 		gl.uniform1f(plane.u_window_level, header.windowLevel);
@@ -348,7 +348,7 @@ window.addEventListener
 
 				gl.viewport(0, 0, window.innerWidth * DPR, window.innerHeight * DPR);
 
-				gl.uniform2f(plane.u_window_size, window.innerWidth, window.innerHeight);
+				gl.uniform2f(plane.u_window_size, window.innerWidth * DPR, window.innerHeight * DPR);
 
 				gl.drawArrays(gl.TRIANGLES, 0, 3);
 			},
